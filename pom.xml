@@ -5,9 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>rs.raf</groupId>
-    <artifactId>domaci5</artifactId>
+    <artifactId>public-blog</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <name>domaci5</name>
+    <name>public-blog</name>
     <packaging>war</packaging>
 
     <properties>
