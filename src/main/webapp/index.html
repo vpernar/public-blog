@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css"
+          integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <title>Public Blog</title>
+</head>
+<body>
+<h1> Public Blog </h1>
+<div id="mainDiv" class="container"></div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function () {
+        var allPostsDiv;
+        var commentList;
+        // Send GET request to retrieve all posts
+        $.ajax({
+            url: '/api/posts',
+            type: 'GET',
+
+            success: function (posts) {
+                allPostsDiv = $('<div id="posts-div">').addClass('post-div')
+                for (var i = 0; i < posts.length; i++) {
+                    var post = posts[i];
+                    var truncatedContent = post.content.substring(0, 100) + '...';
+                    var date = getRelativeTime(post.date);
+                    var postDiv = $('<div>')
+                        .addClass('post')
+                        .attr('data-post-id', post.id)
+                        .append($('<h2>').text(post.title))
+                        .append($('<p>').text(truncatedContent))
+                        .append($('<p>').text(date))
+                        .append($('<small>Show more</small>'))
+                    allPostsDiv.append(postDiv);
+                }
+                $('#mainDiv').append(allPostsDiv);
+                var newPostButton = ($('<button id="new-post-btn">'))
+                    .addClass('new-post-btn')
+                    .text('New Post');
+                $('#mainDiv').append(newPostButton);
+            }
+        });
+
+        var lastId;
+        var divContentBuffer;
+        var divBuffer;
+        // Add click event listener to each post div
+        $('#mainDiv').on('click', '.post small', function () {
+            // Find the closest div with class "post" to the clicked small element
+            var postDiv = $(this).closest('.post');
+            var postId = postDiv.attr('data-post-id');
+
+            if (divBuffer && lastId && divBuffer.attr('data-post-id') !== postId) {
+                var lastDiv = $('div[data-post-id="' + lastId + '"]');
+                lastDiv.empty();
+                lastDiv.html(divContentBuffer);
+            }
+            lastId = postId;
+            divContentBuffer = postDiv.html();
+            divBuffer = postDiv;
+            postDiv.empty();
+
+
+            // Send GET request to retrieve full post details
+            $.ajax({
+                url: '/api/posts/' + postId,
+                type: 'GET',
+
+                success: function (post) {
+                    // Update post div with full details
+                    var postDetails = $('<div>')
+                        .addClass('post-details')
+                        .attr('data-post-id', post.id)
+                        .append($('<h2>').text(post.title))
+                        .append($('<p>').text(post.content))
+                        .append($('<p>').text('Author: ' + post.author))
+                        .append($('<p>').text('Date: ' + post.date));
+                    commentList = $('<ul>').addClass('comment-list');
+
+                    for (var i = 0; i < post.comments.length; i++) {
+                        var comment = post.comments[i];
+                        var commentItem = $('<li>')
+                            .addClass('comment-item')
+                            .append($('<p>').text(comment.author + ': ' + comment.comment))
+                        commentList.append(commentItem);
+                    }
+                    var newCommentForm = $('<form>')
+                        .addClass('new-comment-form')
+                        .append($('<label>').text('Author:'))
+                        .append($('<input id="new-comment-author">').attr('type', 'text').attr('name', 'author'))
+                        .append($('<label>').text('Comment:'))
+                        .append($('<textarea id="new-comment-content">').attr('name', 'content'))
+                        .append($('<button>').attr('id', postId).addClass('save-comment').text('Save Comment'));
+                    var postDetailsDiv = $('<div>')
+                        .addClass('post-details-container')
+                        .append(postDetails)
+                        .append(commentList)
+                        .append(newCommentForm);
+                    $('.post-details-container').remove();
+                    postDiv.append(postDetailsDiv);
+                }
+            });
+        });
+
+        function getRelativeTime(date) {
+            const currentDate = new Date();
+            const postDate = new Date(date);
+            const diffTime = Math.abs(currentDate - postDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays === 1) {
+                return "today";
+            } else {
+                return diffDays + " days ago";
+            }
+        }
+
+        var newPostFormBuffer = null;
+        // Add click event listener to New Post button
+        $('#mainDiv').on('click', '.new-post-btn', function () {
+            $(this).hide();
+            if (newPostFormBuffer === null) {
+                var newPostForm = $('<form id="new-post-form">')
+                    .addClass('new-post-form')
+                    .append($('<label>').text('Title:'))
+                    .append($('<input id="new-post-title">').attr('type', 'text').attr('name', 'title'))
+                    .append($('<label>').text('Author:'))
+                    .append($('<input id="new-post-author">').attr('type', 'text').attr('name', 'author'))
+                    .append($('<label>').text('Content:'))
+                    .append($('<textarea id="new-post-content">').attr('name', 'content'))
+                    .append($('<button>').addClass('save-post-btn').text('Save Post').addClass('save-post'));
+                $(this).parent().append(newPostForm);
+            } else {
+                newPostFormBuffer.show();
+            }
+        });
+
+        $('#mainDiv').on('click', '.save-post-btn', function () {
+            event.preventDefault();
+            // Get the form data and convert it to a JSON object
+            const formData = {
+                author: $('#new-post-author').val(),
+                title: $('#new-post-title').val(),
+                content: $('#new-post-content').val()
+            };
+
+            // Send a POST request to the server to create a new post
+            $.ajax({
+                type: 'POST',
+                url: '/api/posts',
+                data: JSON.stringify(formData),
+                contentType: 'application/json',
+                success: function (post) {
+                    // Hide the new post form and show the new post button
+                    $('#new-post-form').hide();
+                    $('#new-post-btn').show();
+
+                    // Add the new post to the list of posts
+                    var truncatedContent = post.content.substring(0, 100) + '...';
+                    var date = getRelativeTime(post.date);
+                    var postDiv = $('<div>')
+                        .addClass('post')
+                        .attr('data-post-id', post.id)
+                        .append($('<h2>').text(post.title))
+                        .append($('<p>').text(truncatedContent))
+                        .append($('<p>').text(date))
+                        .append($('<small>Show more</small>'))
+                    allPostsDiv.append(postDiv);
+                },
+                error: function (xhr, status, error) {
+                    console.log('Error:', error);
+                }
+            });
+        });
+
+        $('#mainDiv').on('click', '.save-comment', function () {
+            event.preventDefault();
+            // Get the form data and convert it to a JSON object
+            const formData = {
+                author: $('#new-comment-author').val(),
+                comment: $('#new-comment-content').val()
+            };
+
+            var postId = $(this).attr('id');
+
+            $.ajax({
+                url: '/api/posts/' + postId + '/comment',
+                type: 'POST',
+                data: JSON.stringify(formData),
+                contentType: 'application/json',
+
+                success: function (comment) {
+                    // Update post div with full details
+
+                    var commentItem = $('<li>')
+                        .addClass('comment-item')
+                        .append($('<p>').text(comment.author + ': ' + comment.comment))
+                    commentList.append(commentItem);
+                }
+            });
+        });
+
+
+    });
+</script>
+</body>
+</html>
